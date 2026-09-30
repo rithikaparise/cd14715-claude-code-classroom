@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Code Review — airaamane/simple-todo-app #1</title>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}table{border-collapse:collapse;width:100%;margin:1rem 0}th,td{border:1px solid #ddd;padding:.5rem;text-align:left;vertical-align:top}th{background:#f5f5f5}code{background:#f5f5f5;padding:.1rem .3rem;border-radius:4px}pre{background:#111;color:#eee;padding:.75rem;border-radius:8px;overflow:auto}.score{font-size:1.4rem;font-weight:700}.badge{display:inline-block;padding:.15rem .6rem;border-radius:999px;background:#eef;color:#111}</style>
+</head><body>
+<h1>Code Review — airaamane/simple-todo-app #1</h1>
+<p><strong>add clean code fixture</strong> by airaamane</p>
+<p><a href="https://github.com/airaamane/simple-todo-app/pull/1">https://github.com/airaamane/simple-todo-app/pull/1</a></p>
+<p class="score">Overall score: <span class="badge">86/100</span></p>
+<h2>Summary</h2><p>PR #1 adds a clean-code fixture (seed todos + helpers) to support future tests and demos. The change is small and well-structured, with no security exposure, but test assertions around the fixture are thin and a helper mixes concerns. Overall a healthy change with minor follow-ups.</p>
+<h2>Code Quality (88/100)</h2><p>Clean, readable fixture code with no security or performance findings. Two maintainability nits and one style nit; applied code-review-best-practices naming and error-handling checklist.</p>
+<table><thead><tr><th>Location</th><th>Severity</th><th>Category</th><th>Finding</th></tr></thead><tbody><tr><td><code>fixtures/todos.fixture.js:14</code></td><td>low</td><td>style</td><td>Magic date strings (&quot;2026-01-05&quot;) used without named constants.<br><em>Fix: Extract DUE_DATE_* constants with a comment explaining the seed timeline.</em></td></tr>
+<tr><td><code>fixtures/todos.fixture.js:31</code></td><td>medium</td><td>maintainability</td><td>buildFixture() both constructs and sorts todos, mixing creation with ordering policy.<br><em>Fix: Split into createSeedTodos() and sortTodosByDueDate() so tests can opt out of sorting.</em></td></tr>
+<tr><td><code>src/seed.js:9</code></td><td>low</td><td>maintainability</td><td>Unhandled promise rejection if fixture file is missing; no error context.<br><em>Fix: Wrap in try/catch and throw a descriptive Error(&quot;seed fixture not found at ...&quot;).</em></td></tr></tbody></table>
+<h2>Test Coverage (82/100, est. 75%)</h2><p>Fixture is exercised indirectly by app tests but has no dedicated assertions for shape, ordering, or the loadSeed failure path.</p>
+<p><strong>Untested:</strong> <code>fixtures/todos.fixture.js: buildFixture</code>, <code>src/seed.js: loadSeed</code></p>
+<table><thead><tr><th>File</th><th>Function</th><th>Suggestion</th></tr></thead><tbody><tr><td><code>fixtures/todos.fixture.js</code></td><td><code>buildFixture</code></td><td>Returned todo count and default completed=false flags are unasserted.<br><em>Test: given buildFixture(), assert length is 5, every todo has id/title/dueDate, and completed is false.</em></td></tr>
+<tr><td><code>fixtures/todos.fixture.js</code></td><td><code>buildFixture</code></td><td>Sort order of seeded todos is unspecified and untested.<br><em>Test: given buildFixture(), assert dueDates are ascending; assert titles order [&quot;Buy milk&quot;,&quot;Pay rent&quot;,&quot;Ship PR&quot;].</em></td></tr>
+<tr><td><code>src/seed.js</code></td><td><code>loadSeed</code></td><td>Missing-file error path has no test.<br><em>Test: given a missing fixture path, loadSeed() rejects; assert error message matches /fixture not found/.</em></td></tr></tbody></table>
+<h2>Refactoring (87/100)</h2><p>Fixture structure is sound; one extract-method and one modernization would make it exemplary clean code.</p>
+<table><thead><tr><th>Location</th><th>Type</th><th>Suggestion</th></tr></thead><tbody><tr><td><code>fixtures/todos.fixture.js:31</code></td><td>extract-method</td><td>Extract sorting from buildFixture() into sortTodosByDueDate() to separate construction from ordering.<pre>before: function buildFixture(){ const t = [...]; return t.sort(byDue); }
+// after: function createSeedTodos(){ return [...]; }
+function sortTodosByDueDate(t){ return [...t].sort(byDue); }</pre></td></tr>
+<tr><td><code>src/seed.js:4</code></td><td>modernize</td><td>Use async/await with node:fs/promises instead of nested callbacks for readability.<pre>before: fs.readFile(p, (e,d)=&gt;{...})
+// after: const raw = await fs.readFile(p,&quot;utf8&quot;); return JSON.parse(raw);</pre></td></tr></tbody></table>
+<p><strong>Dead code:</strong> <code>src/seed.js: unused variable legacySeed (leftover from prototype)</code></p>
+<h2>Recommendations</h2><ol><li>Add a dedicated fixture spec asserting shape, count, and sort order.</li><li>Split buildFixture() into creation + sorting helpers.</li><li>Add a missing-file rejection test for loadSeed().</li><li>Replace magic date strings with named constants.</li></ol>
+</body></html>

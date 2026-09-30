@@ -1,0 +1,123 @@
+{
+  "pr": {
+    "owner": "airaamane",
+    "repo": "simple-todo-app",
+    "number": 2,
+    "title": "Add search functionality for todos",
+    "author": "airaamane",
+    "url": "https://github.com/airaamane/simple-todo-app/pull/2"
+  },
+  "summary": "PR #2 adds client-side todo search (input + filter + highlight). The feature works for the happy path but has a high-severity XSS vector via unescaped highlight HTML, a performance gap (no debounce, full re-render per keystroke), and meaningful test gaps around case handling and empty states. Needs fixes before merge.",
+  "overallScore": 68,
+  "codeQuality": {
+    "score": 64,
+    "issues": [
+      {
+        "file": "src/search.js",
+        "line": 27,
+        "severity": "high",
+        "category": "security",
+        "message": "Search highlight injects raw todo titles into innerHTML without escaping, enabling stored XSS via a malicious todo title.",
+        "suggestion": "Escape titles with escapeHtml() before wrapping matches in <mark>, or build nodes with textContent + ranges."
+      },
+      {
+        "file": "src/search.js",
+        "line": 12,
+        "severity": "medium",
+        "category": "performance",
+        "message": "Input handler re-filters and re-renders the full list on every keystroke with no debounce; large lists will jank.",
+        "suggestion": "Debounce input by ~150-250ms and memoize the normalized todo index."
+      },
+      {
+        "file": "src/search.js",
+        "line": 18,
+        "severity": "medium",
+        "category": "maintainability",
+        "message": "Case normalization applied to query but not to todo titles, so \"MILK\" misses \"milk\".",
+        "suggestion": "Normalize both sides with .toLowerCase().trim() (or locale-aware toLocaleLowerCase())."
+      },
+      {
+        "file": "src/search.js",
+        "line": 41,
+        "severity": "low",
+        "category": "style",
+        "message": "Magic number 10 (max results) inline with no explanation.",
+        "suggestion": "Extract MAX_SEARCH_RESULTS = 10 with a comment."
+      }
+    ],
+    "summary": "One high-severity XSS issue dominates; plus a real perf gap and a correctness bug in case handling. Applied code-review-best-practices security checklist (injection/escaping) and ESLint findings."
+  },
+  "testCoverage": {
+    "score": 66,
+    "estimatedCoverage": 55,
+    "untestedFunctions": [
+      "src/search.js: searchTodos",
+      "src/search.js: highlightMatch",
+      "src/search.js: renderResults"
+    ],
+    "suggestions": [
+      {
+        "file": "src/search.js",
+        "function": "searchTodos",
+        "description": "Case-insensitive matching is untested and currently broken.",
+        "testCase": "given todos [\"Buy milk\"], search \"MILK\" returns 1 result; assert titles equal [\"Buy milk\"]."
+      },
+      {
+        "file": "src/search.js",
+        "function": "searchTodos",
+        "description": "Empty-query and no-match states have no tests.",
+        "testCase": "given query \"\", returns all todos; given query \"zzz-no-match\", returns []; assert empty-state message shown."
+      },
+      {
+        "file": "src/search.js",
+        "function": "highlightMatch",
+        "description": "HTML-escaping of titles is untested (XSS regression risk).",
+        "testCase": "given title '<img src=x onerror=1>', highlightMatch() output contains &lt;img, never a live tag; assert no \"<img\" substring."
+      },
+      {
+        "file": "src/search.js",
+        "function": "searchTodos",
+        "description": "Special regex characters in query (e.g. \".*+\") are untested.",
+        "testCase": "given query \".*+\", search treats it literally and does not throw; assert result count is 0."
+      }
+    ],
+    "summary": "No dedicated search spec exists; happy-path manual testing only. Priority: escaping regression test, case-insensitivity, and empty/no-match states."
+  },
+  "refactoring": {
+    "score": 73,
+    "suggestions": [
+      {
+        "file": "src/search.js",
+        "line": 8,
+        "type": "extract-method",
+        "description": "Search handler mixes normalization, filtering, slicing, and rendering (~55 lines); extract buildTodoFilter(query) and renderSearchResults().",
+        "example": "before: onInput(q){ ...filter...slice...innerHTML... }\n// after: const f = buildTodoFilter(q); const hits = todos.filter(f).slice(0, MAX); renderSearchResults(hits);"
+      },
+      {
+        "file": "src/search.js",
+        "line": 27,
+        "type": "pattern",
+        "description": "Replace string-concat HTML building with DOM APIs or a tiny escapeHtml() + template helper to close the XSS class of bugs.",
+        "example": "function escapeHtml(s){ return s.replace(/[&<>\"']/g, c => ({\"&\":\"&amp;\",\"<\":\"&lt;\",\">\":\"&gt;\",'\"':\"&quot;\",\"'\":\"&#39;\"}[c])); }"
+      },
+      {
+        "file": "src/search.js",
+        "line": 12,
+        "type": "modernize",
+        "description": "Use AbortController/debounce + optional chaining for the input pipeline.",
+        "example": "input.addEventListener(\"input\", debounce(e => onSearch(e.target?.value ?? \"\"), 200));"
+      }
+    ],
+    "deadCode": [
+      "src/search.js: unused function legacyFilter (superseded by searchTodos)"
+    ],
+    "summary": "Feature code is one big handler; extracting filter/render helpers plus a safe-HTML helper fixes structure and the XSS pattern at once."
+  },
+  "recommendations": [
+    "Fix stored XSS: escape titles before highlight markup (highest priority).",
+    "Fix case-insensitive matching (normalize both sides) and add regression tests.",
+    "Debounce search input and cap renders with MAX_SEARCH_RESULTS.",
+    "Add search spec: case, empty, no-match, regex-chars, and escaping tests.",
+    "Extract buildTodoFilter() and renderSearchResults() helpers."
+  ]
+}

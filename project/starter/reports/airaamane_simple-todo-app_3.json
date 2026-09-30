@@ -1,0 +1,148 @@
+{
+  "pr": {
+    "owner": "airaamane",
+    "repo": "simple-todo-app",
+    "number": 3,
+    "title": "Add premium subscription features",
+    "author": "airaamane",
+    "url": "https://github.com/airaamane/simple-todo-app/pull/3"
+  },
+  "summary": "PR #3 introduces premium subscriptions (plans, checkout, entitlements, premium todo features). It is the largest and riskiest change: client-side price/entitlement checks, a hardcoded test key, and missing server-side verification create high-severity billing-bypass risks, with no tests for upgrade/downgrade, webhook, or entitlement edge cases. Requires security rework before merge.",
+  "overallScore": 58,
+  "codeQuality": {
+    "score": 52,
+    "issues": [
+      {
+        "file": "src/billing/checkout.js",
+        "line": 36,
+        "severity": "high",
+        "category": "security",
+        "message": "Subscription price taken from client request body and trusted for charge creation; attacker can set price to 1 cent.",
+        "suggestion": "Look up price server-side from PLAN_PRICES by planId; never accept amount from the client."
+      },
+      {
+        "file": "src/billing/entitlements.js",
+        "line": 22,
+        "severity": "high",
+        "category": "security",
+        "message": "Premium gate checked only in the UI (isPremium flag in localStorage); API routes serve premium features without verification.",
+        "suggestion": "Enforce entitlements server-side on every premium route via requirePremium middleware verifying Stripe subscription status."
+      },
+      {
+        "file": "src/billing/stripe.js",
+        "line": 7,
+        "severity": "high",
+        "category": "security",
+        "message": "Hardcoded Stripe secret key committed to source.",
+        "suggestion": "Remove key, rotate it immediately, and read from process.env.STRIPE_SECRET_KEY via the secret manager."
+      },
+      {
+        "file": "src/billing/webhooks.js",
+        "line": 48,
+        "severity": "high",
+        "category": "security",
+        "message": "Stripe webhook handler skips signature verification, allowing forged subscription events.",
+        "suggestion": "Verify with stripe.webhooks.constructEvent(rawBody, sig, webhookSecret) before mutating entitlements."
+      },
+      {
+        "file": "src/billing/plans.js",
+        "line": 19,
+        "severity": "medium",
+        "category": "maintainability",
+        "message": "Plan matrix duplicated between frontend and backend with no shared source; drift risk.",
+        "suggestion": "Share a single PLANS definition imported by both, or generate the UI list from the API."
+      },
+      {
+        "file": "src/premium/features.js",
+        "line": 63,
+        "severity": "medium",
+        "category": "performance",
+        "message": "Premium export loads all todos into memory for CSV generation; unbounded for large accounts.",
+        "suggestion": "Stream rows with pagination/cursors and cap export size with a documented limit."
+      }
+    ],
+    "summary": "Four high-severity billing/security findings (client-trusted price, client-only gates, leaked secret, unverified webhooks) plus plan drift and export scalability. Applied security-analysis skill checklist and must-fix billing rules."
+  },
+  "testCoverage": {
+    "score": 55,
+    "estimatedCoverage": 40,
+    "untestedFunctions": [
+      "src/billing/checkout.js: createCheckoutSession",
+      "src/billing/webhooks.js: handleWebhook",
+      "src/billing/entitlements.js: requirePremium",
+      "src/premium/features.js: exportTodosCsv",
+      "src/billing/plans.js: getPlan"
+    ],
+    "suggestions": [
+      {
+        "file": "src/billing/checkout.js",
+        "function": "createCheckoutSession",
+        "description": "Tampered-price path untested (billing-bypass regression).",
+        "testCase": "given planId \"pro\" with body amount 1, assert server charges 999 (plan price) and ignores client amount."
+      },
+      {
+        "file": "src/billing/webhooks.js",
+        "function": "handleWebhook",
+        "description": "Forged/unsigned webhook path untested.",
+        "testCase": "given an event with invalid signature, assert 400 and no entitlement change; given valid signature, assert upgrade applied."
+      },
+      {
+        "file": "src/billing/entitlements.js",
+        "function": "requirePremium",
+        "description": "Downgrade/expiry mid-session untested.",
+        "testCase": "given an expired subscription, premium route returns 403; assert free-tier route still 200."
+      },
+      {
+        "file": "src/premium/features.js",
+        "function": "exportTodosCsv",
+        "description": "Large-export and empty-list behavior untested.",
+        "testCase": "given 0 todos, returns header-only CSV; given 50k todos, streams without OOM; assert row count and quoting of commas."
+      },
+      {
+        "file": "src/billing/plans.js",
+        "function": "getPlan",
+        "description": "Unknown-plan lookup untested.",
+        "testCase": "given planId \"nope\", assert throws PlanNotFound with code 404."
+      }
+    ],
+    "summary": "Billing paths have effectively no automated coverage; the five suggestions above are the minimum merge-blocking set, ordered by financial risk."
+  },
+  "refactoring": {
+    "score": 66,
+    "suggestions": [
+      {
+        "file": "src/billing/checkout.js",
+        "line": 36,
+        "type": "pattern",
+        "description": "Introduce a server-authoritative pricing service (getPlanPrice(planId)) and a requirePremium middleware to centralize billing policy.",
+        "example": "async function requirePremium(req,res,next){ const sub = await getActiveSubscription(req.user.id); if(!sub) return res.sendStatus(403); next(); }"
+      },
+      {
+        "file": "src/billing/plans.js",
+        "line": 19,
+        "type": "extract-method",
+        "description": "Unify duplicated plan matrix into a single shared PLANS module consumed by UI and API.",
+        "example": "export const PLANS = { free:{price:0,...}, pro:{price:999,...} };\n// UI: Object.entries(PLANS).map(renderPlan)"
+      },
+      {
+        "file": "src/premium/features.js",
+        "line": 63,
+        "type": "modernize",
+        "description": "Replace in-memory CSV string building with async generator streaming.",
+        "example": "async function* todoRows(userId){ let cur=null; while(true){ const page=await listTodos(userId,{cursor:cur}); if(!page.length) break; yield* page; cur=page.at(-1).id; } }"
+      }
+    ],
+    "deadCode": [
+      "src/billing/legacy.js: entire module superseded by checkout.js (still imported nowhere)",
+      "src/premium/features.js: unused function betaBadge (abandoned experiment)"
+    ],
+    "summary": "Billing logic is scattered across UI/API with duplicated plans; centralizing pricing + entitlements and streaming exports modernizes the structure."
+  },
+  "recommendations": [
+    "BLOCKER: stop trusting client price; verify plan server-side and rotate the leaked Stripe key.",
+    "BLOCKER: verify Stripe webhook signatures and enforce premium gates server-side.",
+    "Add billing regression tests (tampered price, forged webhook, expired sub) before merge.",
+    "Unify the plan matrix into one shared module; stream large CSV exports.",
+    "Remove src/billing/legacy.js and other dead premium code."
+  ]
+}

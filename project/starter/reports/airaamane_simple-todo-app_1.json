@@ -1,0 +1,100 @@
+{
+  "pr": {
+    "owner": "airaamane",
+    "repo": "simple-todo-app",
+    "number": 1,
+    "title": "add clean code fixture",
+    "author": "airaamane",
+    "url": "https://github.com/airaamane/simple-todo-app/pull/1"
+  },
+  "summary": "PR #1 adds a clean-code fixture (seed todos + helpers) to support future tests and demos. The change is small and well-structured, with no security exposure, but test assertions around the fixture are thin and a helper mixes concerns. Overall a healthy change with minor follow-ups.",
+  "overallScore": 86,
+  "codeQuality": {
+    "score": 88,
+    "issues": [
+      {
+        "file": "fixtures/todos.fixture.js",
+        "line": 14,
+        "severity": "low",
+        "category": "style",
+        "message": "Magic date strings (\"2026-01-05\") used without named constants.",
+        "suggestion": "Extract DUE_DATE_* constants with a comment explaining the seed timeline."
+      },
+      {
+        "file": "fixtures/todos.fixture.js",
+        "line": 31,
+        "severity": "medium",
+        "category": "maintainability",
+        "message": "buildFixture() both constructs and sorts todos, mixing creation with ordering policy.",
+        "suggestion": "Split into createSeedTodos() and sortTodosByDueDate() so tests can opt out of sorting."
+      },
+      {
+        "file": "src/seed.js",
+        "line": 9,
+        "severity": "low",
+        "category": "maintainability",
+        "message": "Unhandled promise rejection if fixture file is missing; no error context.",
+        "suggestion": "Wrap in try/catch and throw a descriptive Error(\"seed fixture not found at ...\")."
+      }
+    ],
+    "summary": "Clean, readable fixture code with no security or performance findings. Two maintainability nits and one style nit; applied code-review-best-practices naming and error-handling checklist."
+  },
+  "testCoverage": {
+    "score": 82,
+    "estimatedCoverage": 75,
+    "untestedFunctions": [
+      "fixtures/todos.fixture.js: buildFixture",
+      "src/seed.js: loadSeed"
+    ],
+    "suggestions": [
+      {
+        "file": "fixtures/todos.fixture.js",
+        "function": "buildFixture",
+        "description": "Returned todo count and default completed=false flags are unasserted.",
+        "testCase": "given buildFixture(), assert length is 5, every todo has id/title/dueDate, and completed is false."
+      },
+      {
+        "file": "fixtures/todos.fixture.js",
+        "function": "buildFixture",
+        "description": "Sort order of seeded todos is unspecified and untested.",
+        "testCase": "given buildFixture(), assert dueDates are ascending; assert titles order [\"Buy milk\",\"Pay rent\",\"Ship PR\"]."
+      },
+      {
+        "file": "src/seed.js",
+        "function": "loadSeed",
+        "description": "Missing-file error path has no test.",
+        "testCase": "given a missing fixture path, loadSeed() rejects; assert error message matches /fixture not found/."
+      }
+    ],
+    "summary": "Fixture is exercised indirectly by app tests but has no dedicated assertions for shape, ordering, or the loadSeed failure path."
+  },
+  "refactoring": {
+    "score": 87,
+    "suggestions": [
+      {
+        "file": "fixtures/todos.fixture.js",
+        "line": 31,
+        "type": "extract-method",
+        "description": "Extract sorting from buildFixture() into sortTodosByDueDate() to separate construction from ordering.",
+        "example": "before: function buildFixture(){ const t = [...]; return t.sort(byDue); }\n// after: function createSeedTodos(){ return [...]; }\nfunction sortTodosByDueDate(t){ return [...t].sort(byDue); }"
+      },
+      {
+        "file": "src/seed.js",
+        "line": 4,
+        "type": "modernize",
+        "description": "Use async/await with node:fs/promises instead of nested callbacks for readability.",
+        "example": "before: fs.readFile(p, (e,d)=>{...})\n// after: const raw = await fs.readFile(p,\"utf8\"); return JSON.parse(raw);"
+      }
+    ],
+    "deadCode": [
+      "src/seed.js: unused variable legacySeed (leftover from prototype)"
+    ],
+    "summary": "Fixture structure is sound; one extract-method and one modernization would make it exemplary clean code."
+  },
+  "recommendations": [
+    "Add a dedicated fixture spec asserting shape, count, and sort order.",
+    "Split buildFixture() into creation + sorting helpers.",
+    "Add a missing-file rejection test for loadSeed().",
+    "Replace magic date strings with named constants."
+  ]
+}
