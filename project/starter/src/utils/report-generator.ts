@@ -1,184 +1,149 @@
-import { ReviewReport } from '../types/report-types';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import type { ReviewReport } from '../types/index.js';
 
-/**
- * Report Generator
- * Converts ReviewReport to various output formats (Markdown, HTML, JSON)
- */
+function esc(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Generates JSON / Markdown / HTML review reports. */
 export class ReportGenerator {
-  /**
-   * Generate a Markdown report for PR comments
-   */
-  generateMarkdownReport(report: ReviewReport): string {
-    const { summary, recommendations, fileReviews } = report;
+  constructor(private outDir = 'reports') {}
 
-    const formattedRecs = recommendations.slice(0, 5).map((rec, idx) => {
-      const emoji = {
-        critical: '🚨',
-        high: '⚠️',
-        medium: '📝',
-        low: '💡'
-      }[rec.priority];
-
-      return `${idx + 1}. ${emoji} **${rec.category}**: ${rec.description}
-   - Files: ${rec.files.join(', ')}`;
-    }).join('\n\n');
-
-    const formattedFiles = fileReviews.map(review => {
-      const { file, codeQuality, testCoverage, refactorings } = review;
-
-      const issueList = codeQuality.issues.slice(0, 3)
-        .map(i => `  - Line ${i.line}: \`${i.severity}\` ${i.description}`)
-        .join('\n');
-
-      const testList = testCoverage.untestedPaths.slice(0, 2)
-        .map(p => `  - \`${p.location}\` (${p.priority} priority)`)
-        .join('\n');
-
-      const refactorList = refactorings.suggestions.slice(0, 2)
-        .map(s => `  - **${s.type}**: ${s.description}`)
-        .join('\n');
-
-      return `### 📄 \`${file}\`
-
-**Quality Score:** ${codeQuality.overallScore}/100 | **Coverage:** ~${testCoverage.coverageEstimate}%
-
-#### Issues (${codeQuality.issues.length})
-${issueList || '  None found'}
-${codeQuality.issues.length > 3 ? `\n  *...and ${codeQuality.issues.length - 3} more*` : ''}
-
-#### Test Gaps (${testCoverage.untestedPaths.length})
-${testList || '  None found'}
-${testCoverage.untestedPaths.length > 2 ? `\n  *...and ${testCoverage.untestedPaths.length - 2} more*` : ''}
-
-#### Refactoring Opportunities (${refactorings.suggestions.length})
-${refactorList || '  None found'}
-${refactorings.suggestions.length > 2 ? `\n  *...and ${refactorings.suggestions.length - 2} more*` : ''}`;
-    }).join('\n\n---\n\n');
-
-    return `# 🔍 Code Review Report
-
-## Summary
-
-| Metric | Value |
-|--------|-------|
-| **Overall Score** | ${summary.overallScore}/100 |
-| **Files Reviewed** | ${summary.totalFiles} |
-| **Critical Issues** | ${summary.criticalIssues} |
-| **High Priority Tests** | ${summary.highPriorityTests} |
-| **Refactoring Opportunities** | ${summary.refactoringOpportunities} |
-
-## 🎯 Top Recommendations
-
-${formattedRecs || 'No recommendations at this time.'}
-
-## 📁 File Details
-
-${formattedFiles}
-
----
-
-*Generated at ${report.metadata.analyzedAt} • Duration: ${report.metadata.duration}ms*
-`;
+  async saveAll(report: ReviewReport, baseName: string): Promise<string[]> {
+    await mkdir(this.outDir, { recursive: true });
+    const json = this.toJSON(report);
+    const md = this.toMarkdown(report);
+    const html = this.toHTML(report);
+    const paths = [
+      join(this.outDir, `${baseName}.json`),
+      join(this.outDir, `${baseName}.md`),
+      join(this.outDir, `${baseName}.html`),
+    ];
+    await writeFile(paths[0], json, 'utf8');
+    await writeFile(paths[1], md, 'utf8');
+    await writeFile(paths[2], html, 'utf8');
+    return paths;
   }
 
-  /**
-   * Generate an HTML report for web display
-   */
-  generateHTMLReport(report: ReviewReport): string {
-    const { summary, recommendations, metadata } = report;
-
-    const recList = recommendations.slice(0, 5).map(r => `
-      <li class="rec-${r.priority}">
-        <span class="priority">[${r.priority.toUpperCase()}]</span>
-        <strong>${r.category}</strong>: ${r.description}
-        <br><small>Files: ${r.files.join(', ')}</small>
-      </li>
-    `).join('');
-
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Code Review Report</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      max-width: 1000px;
-      margin: 0 auto;
-      padding: 24px;
-      background: #f8f9fa;
-      color: #212529;
-    }
-    h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 12px; }
-    .summary {
-      background: white;
-      padding: 24px;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      margin: 24px 0;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 16px;
-    }
-    .metric { text-align: center; }
-    .metric-value { font-size: 2em; font-weight: bold; color: #3498db; }
-    .metric-label { color: #6c757d; font-size: 0.9em; }
-    ul { list-style: none; padding: 0; }
-    li { padding: 12px; margin: 8px 0; border-radius: 4px; background: white; }
-    .rec-critical { border-left: 4px solid #e74c3c; }
-    .rec-high { border-left: 4px solid #f39c12; }
-    .rec-medium { border-left: 4px solid #3498db; }
-    .rec-low { border-left: 4px solid #27ae60; }
-    .priority { font-weight: bold; margin-right: 8px; }
-    .rec-critical .priority { color: #e74c3c; }
-    .rec-high .priority { color: #f39c12; }
-    .rec-medium .priority { color: #3498db; }
-    .rec-low .priority { color: #27ae60; }
-    footer { text-align: center; color: #6c757d; margin-top: 32px; font-size: 0.9em; }
-  </style>
-</head>
-<body>
-  <h1>🔍 Code Review Report</h1>
-  
-  <div class="summary">
-    <div class="metric">
-      <div class="metric-value">${summary.overallScore}</div>
-      <div class="metric-label">Overall Score</div>
-    </div>
-    <div class="metric">
-      <div class="metric-value">${summary.totalFiles}</div>
-      <div class="metric-label">Files Reviewed</div>
-    </div>
-    <div class="metric">
-      <div class="metric-value">${summary.criticalIssues}</div>
-      <div class="metric-label">Critical Issues</div>
-    </div>
-    <div class="metric">
-      <div class="metric-value">${summary.highPriorityTests}</div>
-      <div class="metric-label">Tests Needed</div>
-    </div>
-    <div class="metric">
-      <div class="metric-value">${summary.refactoringOpportunities}</div>
-      <div class="metric-label">Refactorings</div>
-    </div>
-  </div>
-
-  <h2>🎯 Top Recommendations</h2>
-  <ul>${recList || '<li>No recommendations at this time.</li>'}</ul>
-
-  <footer>
-    Generated at ${metadata.analyzedAt} • Duration: ${metadata.duration}ms
-  </footer>
-</body>
-</html>`;
-  }
-
-  /**
-   * Generate formatted JSON report
-   */
-  generateJSONReport(report: ReviewReport): string {
+  toJSON(report: ReviewReport): string {
     return JSON.stringify(report, null, 2);
+  }
+
+  toMarkdown(r: ReviewReport): string {
+    const lines: string[] = [];
+    lines.push(`# Code Review — ${r.pr.owner}/${r.pr.repo} #${r.pr.number}`);
+    lines.push('');
+    lines.push(`**${esc(r.pr.title)}**${r.pr.author ? ` by ${esc(r.pr.author)}` : ''}`);
+    if (r.pr.url) lines.push(`<${r.pr.url}>`);
+    lines.push('');
+    lines.push(`**Overall score:** ${r.overallScore}/100`);
+    lines.push('');
+    lines.push('## Summary');
+    lines.push('');
+    lines.push(r.summary);
+    lines.push('');
+    lines.push(`## Code Quality (${r.codeQuality.score}/100)`);
+    lines.push('');
+    lines.push(r.codeQuality.summary);
+    lines.push('');
+    if (r.codeQuality.issues.length === 0) {
+      lines.push('_No issues found._');
+    } else {
+      for (const i of r.codeQuality.issues) {
+        lines.push(
+          `- **[${i.severity}/${i.category}]** \`${i.file}:${i.line}\` — ${i.message}${i.suggestion ? ` **Fix:** ${i.suggestion}` : ''}`,
+        );
+      }
+    }
+    lines.push('');
+    lines.push(
+      `## Test Coverage (${r.testCoverage.score}/100, est. ${r.testCoverage.estimatedCoverage}%)`,
+    );
+    lines.push('');
+    lines.push(r.testCoverage.summary);
+    lines.push('');
+    if (r.testCoverage.untestedFunctions.length > 0) {
+      lines.push('**Untested:**');
+      for (const f of r.testCoverage.untestedFunctions) lines.push(`- \`${f}\``);
+      lines.push('');
+    }
+    for (const s of r.testCoverage.suggestions) {
+      lines.push(
+        `- \`${s.file}\` :: **${s.function}** — ${s.description}${s.testCase ? ` **Test:** ${s.testCase}` : ''}`,
+      );
+    }
+    lines.push('');
+    lines.push(`## Refactoring (${r.refactoring.score}/100)`);
+    lines.push('');
+    lines.push(r.refactoring.summary);
+    lines.push('');
+    for (const s of r.refactoring.suggestions) {
+      lines.push(
+        `- \`${s.file}${s.line ? `:${s.line}` : ''}\` **[${s.type}]** — ${s.description}`,
+      );
+      if (s.example) {
+        lines.push('');
+        lines.push('```js');
+        lines.push(s.example);
+        lines.push('```');
+      }
+    }
+    if (r.refactoring.deadCode.length > 0) {
+      lines.push('');
+      lines.push('**Dead code:**');
+      for (const d of r.refactoring.deadCode) lines.push(`- \`${d}\``);
+    }
+    lines.push('');
+    lines.push('## Recommendations');
+    lines.push('');
+    r.recommendations.forEach((rec, i) => lines.push(`${i + 1}. ${rec}`));
+    lines.push('');
+    return lines.join('\n');
+  }
+
+  toHTML(r: ReviewReport): string {
+    const issueRows = r.codeQuality.issues
+      .map(
+        (i) =>
+          `<tr><td><code>${esc(i.file)}:${i.line}</code></td><td>${esc(i.severity)}</td><td>${esc(i.category)}</td><td>${esc(i.message)}${i.suggestion ? `<br><em>Fix: ${esc(i.suggestion)}</em>` : ''}</td></tr>`,
+      )
+      .join('\n') || '<tr><td colspan="4">No issues found.</td></tr>';
+    const testRows = r.testCoverage.suggestions
+      .map(
+        (s) =>
+          `<tr><td><code>${esc(s.file)}</code></td><td><code>${esc(s.function)}</code></td><td>${esc(s.description)}${s.testCase ? `<br><em>Test: ${esc(s.testCase)}</em>` : ''}</td></tr>`,
+      )
+      .join('\n') || '<tr><td colspan="3">No suggestions.</td></tr>';
+    const refRows = r.refactoring.suggestions
+      .map(
+        (s) =>
+          `<tr><td><code>${esc(s.file)}${s.line ? `:${s.line}` : ''}</code></td><td>${esc(s.type)}</td><td>${esc(s.description)}${s.example ? `<pre>${esc(s.example)}</pre>` : ''}</td></tr>`,
+      )
+      .join('\n') || '<tr><td colspan="3">No suggestions.</td></tr>';
+    return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Code Review — ${esc(r.pr.owner)}/${esc(r.pr.repo)} #${r.pr.number}</title>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem;color:#1a1a1a}table{border-collapse:collapse;width:100%;margin:1rem 0}th,td{border:1px solid #ddd;padding:.5rem;text-align:left;vertical-align:top}th{background:#f5f5f5}code{background:#f5f5f5;padding:.1rem .3rem;border-radius:4px}pre{background:#111;color:#eee;padding:.75rem;border-radius:8px;overflow:auto}.score{font-size:1.4rem;font-weight:700}.badge{display:inline-block;padding:.15rem .6rem;border-radius:999px;background:#eef;color:#111}</style>
+</head><body>
+<h1>Code Review — ${esc(r.pr.owner)}/${esc(r.pr.repo)} #${r.pr.number}</h1>
+<p><strong>${esc(r.pr.title)}</strong>${r.pr.author ? ` by ${esc(r.pr.author)}` : ''}</p>
+${r.pr.url ? `<p><a href="${esc(r.pr.url)}">${esc(r.pr.url)}</a></p>` : ''}
+<p class="score">Overall score: <span class="badge">${r.overallScore}/100</span></p>
+<h2>Summary</h2><p>${esc(r.summary)}</p>
+<h2>Code Quality (${r.codeQuality.score}/100)</h2><p>${esc(r.codeQuality.summary)}</p>
+<table><thead><tr><th>Location</th><th>Severity</th><th>Category</th><th>Finding</th></tr></thead><tbody>${issueRows}</tbody></table>
+<h2>Test Coverage (${r.testCoverage.score}/100, est. ${r.testCoverage.estimatedCoverage}%)</h2><p>${esc(r.testCoverage.summary)}</p>
+<p><strong>Untested:</strong> ${r.testCoverage.untestedFunctions.length ? r.testCoverage.untestedFunctions.map((f) => `<code>${esc(f)}</code>`).join(', ') : 'none'}</p>
+<table><thead><tr><th>File</th><th>Function</th><th>Suggestion</th></tr></thead><tbody>${testRows}</tbody></table>
+<h2>Refactoring (${r.refactoring.score}/100)</h2><p>${esc(r.refactoring.summary)}</p>
+<table><thead><tr><th>Location</th><th>Type</th><th>Suggestion</th></tr></thead><tbody>${refRows}</tbody></table>
+${r.refactoring.deadCode.length ? `<p><strong>Dead code:</strong> ${r.refactoring.deadCode.map((d) => `<code>${esc(d)}</code>`).join(', ')}</p>` : ''}
+<h2>Recommendations</h2><ol>${r.recommendations.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
+</body></html>`;
   }
 }

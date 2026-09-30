@@ -1,40 +1,27 @@
 {
-  "name": "cd14715-claude-code-classroom",
-  "private": true,
-  "workspaces": [
-    "lesson-01-model-selection/demo",
-    "lesson-01-model-selection/exercise/starter",
-    "lesson-01-model-selection/exercise/solution",
-    "lesson-02-extended-thinking/demo",
-    "lesson-02-extended-thinking/exercise/starter",
-    "lesson-02-extended-thinking/exercise/solution",
-    "lesson-05-agent-sdk/demo",
-    "lesson-05-agent-sdk/exercise/starter",
-    "lesson-05-agent-sdk/exercise/solution",
-    "lesson-06-custom-tools/demo",
-    "lesson-06-custom-tools/exercise/starter",
-    "lesson-06-custom-tools/exercise/solution",
-    "lesson-07-structured-outputs/demo",
-    "lesson-07-structured-outputs/exercise/starter",
-    "lesson-07-structured-outputs/exercise/solution",
-    "lesson-08-claude-skills/demo",
-    "lesson-08-claude-skills/exercise/starter",
-    "lesson-08-claude-skills/exercise/solution",
-    "lesson-09-mcp-integration/demo",
-    "lesson-09-mcp-integration/exercise/starter",
-    "lesson-09-mcp-integration/exercise/solution",
-    "lesson-10-multi-agent-orchestration/demo",
-    "lesson-10-multi-agent-orchestration/exercise/starter",
-    "lesson-10-multi-agent-orchestration/exercise/solution",
-    "lesson-11-tdd-with-ai/demo",
-    "lesson-11-tdd-with-ai/exercise/starter",
-    "lesson-11-tdd-with-ai/exercise/solution",
-    "lesson-12-evaluating-agents/demo",
-    "lesson-12-evaluating-agents/exercise/starter",
-    "lesson-12-evaluating-agents/exercise/solution",
-    "project/starter"
-  ],
+  "name": "multi-agent-code-review",
+  "version": "1.0.0",
+  "description": "Production-ready multi-agent code review system powered by the Claude Agent SDK",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "build:emit": "tsc",
+    "dev": "tsx src/main.ts",
+    "start": "node dist/main.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "winston": "^3.13.0",
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.23.0"
+  },
   "devDependencies": {
-    "@mermaid-js/mermaid-cli": "^11.12.0"
+    "@types/node": "^22.0.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
   }
 }

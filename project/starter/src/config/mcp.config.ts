@@ -1,42 +1,31 @@
 /**
- * Model Context Protocol (MCP) server configurations
+ * MCP server configurations for external tool integration.
  *
- * Required MCP Servers:
- * 1. GitHub - For PR/repo operations
- * 2. ESLint - For code linting and style analysis
- *
- * Documentation:
- * - MCP Protocol: https://modelcontextprotocol.io
- * - GitHub MCP: https://github.com/github/github-mcp-server
- * - ESLint MCP: https://eslint.org/docs/latest/use/mcp
+ * - GitHub MCP server: fetches PR data, repository information, file diffs.
+ * - ESLint MCP server: lints JavaScript/TypeScript for style and correctness.
  */
 
-export const mcpServersConfig = {
-  /**
-   * GitHub MCP Server
-   * Provides tools for GitHub API operations
-   *
-   * TODO: Configure with:
-   * - type: 'stdio' as const
-   * - command: 'npx'
-   * - args: ['-y', '@modelcontextprotocol/server-github']
-   * - env: { GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GITHUB_TOKEN || '' }
-   *
-   * Note: GITHUB_TOKEN is optional (recommended for private repos and higher rate limits).
-   * The GitHub MCP server expects GITHUB_PERSONAL_ACCESS_TOKEN as the env var name.
-   * We map our GITHUB_TOKEN from .env to this expected name.
-   */
-  github: { },
+const githubToken = process.env.GITHUB_TOKEN ?? '';
 
-  /**
-   * ESLint MCP Server
-   * Provides tools for linting and code quality analysis
-   *
-   * TODO: Configure with:
-   * - type: 'stdio' as const
-   * - command: 'npx'
-   * - args: ['-y', '@eslint/mcp@latest']
-   * - env: {}
-   */
-  eslint: { }
+export const githubMcpServer = {
+  type: 'stdio' as const,
+  command: 'npx' as const,
+  args: ['-y', '@modelcontextprotocol/server-github'],
+  env: {
+    GITHUB_PERSONAL_ACCESS_TOKEN: githubToken,
+  },
 };
+
+export const eslintMcpServer = {
+  type: 'stdio' as const,
+  command: 'npx' as const,
+  args: ['-y', 'eslint-mcp'],
+  env: {},
+};
+
+export const mcpServers = {
+  github: githubMcpServer,
+  eslint: eslintMcpServer,
+};
+
+export type McpServers = typeof mcpServers;

@@ -1,49 +1,73 @@
-import * as dotenv from 'dotenv';
+import 'dotenv/config';
+import { Orchestrator } from './orchestrator.js';
+import { ReportGenerator } from './utils/report-generator.js';
+import { logger } from './utils/logger.js';
 
-// Load environment variables
-dotenv.config();
+function usage(): string {
+  return 'Usage: npm run dev -- <owner> <repo> <prNumber>\nExample: npm run dev -- airaamane simple-todo-app 1';
+}
 
-/**
- * Main entry point for the Claude Multi-Agent Code Review System
- * Usage: npm run dev <owner> <repo> <pr-number>
- */
-async function main() {
-  const [owner, repo, prStr] = process.argv.slice(2);
+function fail(message: string): never {
+  console.error(`Error: ${message}\n\n${usage()}`);
+  process.exit(1);
+}
 
-  // TODO: Validate command line arguments
-  // - Check if owner, repo, and prStr are provided
-  // - Convert prStr to number and validate it's a valid integer
-  // - Exit with error message if validation fails
+async function main(): Promise<void> {
+  const [, , owner, repo, prRaw] = process.argv;
+  if (!owner || !repo || !prRaw) {
+    fail('All three arguments (owner, repo, prNumber) are required.');
+  }
+  const prNumber = Number.parseInt(prRaw, 10);
+  if (!Number.isInteger(prNumber) || prNumber <= 0) {
+    fail(`PR number must be a valid positive integer (got "${prRaw}").`);
+  }
 
-  // TODO: Validate authentication (choose ONE method)
-  // Students must have either:
-  //   - ANTHROPIC_API_KEY environment variable, OR
-  //   - AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY for Bedrock
-  //
-  // If using AWS Bedrock:
-  //   - Verify AWS_REGION is set
-  //   - Log: "🔐 Using AWS Bedrock authentication"
-  // If using Anthropic API:
-  //   - Log: "🔐 Using Anthropic API authentication"
-  // If neither method is configured:
-  //   - Exit with clear error message showing both options
+  // ── Authentication validation ──
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const awsKey = process.env.AWS_ACCESS_KEY_ID;
+  const awsSecret = process.env.AWS_SECRET_ACCESS_KEY;
+  const awsRegion = process.env.AWS_REGION;
+  const hasAnthropic = !!anthropicKey;
+  const hasAws = !!awsKey && !!awsSecret;
+  if (!hasAnthropic && !hasAws) {
+    fail(
+      'No credentials found. Set ANTHROPIC_API_KEY (or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY + AWS_REGION).',
+    );
+  }
+  if (hasAws && !awsRegion) {
+    fail('AWS_REGION is required when using AWS credentials.');
+  }
+  logger.info(
+    `Auth: using ${hasAnthropic ? 'Anthropic API key' : 'AWS credentials'}.`,
+  );
 
-  // TODO: Validate ANTHROPIC_MODEL environment variable
-  // This is REQUIRED for both authentication methods
-  // - For AWS Bedrock: us.anthropic.claude-sonnet-4-5-20250929-v1:0
-  // - For Anthropic API: claude-sonnet-4-5-20250929
-  // Exit with error if not set
+  // ── Model validation ──
+  const model = process.env.ANTHROPIC_MODEL;
+  if (!model) {
+    fail(
+      'ANTHROPIC_MODEL is required. Example: ANTHROPIC_MODEL=claude-sonnet-4-5-20250929 (Anthropic) or a Bedrock model id.',
+    );
+  }
 
-  console.log('start here', owner, repo, prStr)
+  if (!process.env.PROJECT_ROOT) {
+    logger.warn('PROJECT_ROOT is not set; continuing with cwd.');
+  }
+
   try {
-    // TODO: Create orchestrator instance
-    // TODO: Call .reviewPullRequest(owner, repo, prNumber);
-    // TODO: Generate formatted reports using ReportGenerator
-    // Hint: Use ReportGenerator to create Markdown, HTML, and JSON reports
-    // Save reports to 'reports/' directory with appropriate filenames
-  } catch (error) {
-    console.error('Error:', error);
+    const orchestrator = new Orchestrator();
+    logger.info(`Reviewing PR ${owner}/${repo}#${prNumber} ...`);
+    const report = await orchestrator.reviewPullRequest(owner, repo, prNumber);
+    const generator = new ReportGenerator('reports');
+    const base = `${owner}_${repo}_${prNumber}`;
+    const paths = await generator.saveAll(report, base);
+    logger.info('Reports saved:');
+    for (const p of paths) logger.info(`  - ${p}`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // User-friendly message, no raw stack trace.
+    console.error(`Failed to review PR: ${message}`);
+    process.exit(1);
   }
 }
 
-main();
+await main();
