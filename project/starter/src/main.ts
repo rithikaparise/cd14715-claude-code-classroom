@@ -49,6 +49,17 @@ async function main(): Promise<void> {
     );
   }
 
+  // ── GitHub token validation (used by the GitHub MCP server) ──
+  // src/config/mcp.config.ts maps GITHUB_PERSONAL_ACCESS_TOKEN from
+  // process.env.GITHUB_TOKEN, so fail early with a helpful message
+  // instead of letting the MCP server fail later.
+  const githubToken = process.env.GITHUB_TOKEN;
+  if (!githubToken) {
+    fail(
+      'GITHUB_TOKEN is required for GitHub MCP access. Create a token with repo read access at https://github.com/settings/tokens and set GITHUB_TOKEN.',
+    );
+  }
+
   if (!process.env.PROJECT_ROOT) {
     logger.warn('PROJECT_ROOT is not set; continuing with cwd.');
   }

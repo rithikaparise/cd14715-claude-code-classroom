@@ -95,7 +95,6 @@ export class Orchestrator {
           'mcp__github__get_pull_request_files',
           'mcp__eslint__lint',
         ],
-        permissionMode: 'bypassPermissions' as never,
         maxTurns: 30,
         outputFormat: {
           type: 'json_schema' as never,
